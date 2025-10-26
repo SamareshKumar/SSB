@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-900 text-white">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WAT Test</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        /* Timer Bar Animation */
+        #timer-bar-inner {
+            animation: shrink 30s linear forwards;
+            /* We set forwards so it stays at 0% width */
+        }
+
+        @keyframes shrink {
+            from {
+                width: 100%;
+            }
+            to {
+                width: 0%;
+            }
+        }
+    </style>
+</head>
+<body class="h-full flex items-center justify-center p-4">
+    <div class="w-full max-w-2xl mx-auto text-center">
+        
+        <!-- Timer Bar Container (initially visible) -->
+        <div id="timer-container" class="mb-4 h-2 bg-gray-700 rounded-full overflow-hidden">
+            <div id="timer-bar-inner" class="h-full bg-blue-500 rounded-full"></div>
+        </div>
+
+        <!-- Word Counter (initially visible) -->
+        <div id="counter-display" class="mb-8 text-lg text-gray-400">Word 1 of 20</div>
+
+        <!-- Flashcard Container (initially visible) -->
+        <div id="flashcard" class="bg-gray-800 rounded-lg shadow-2xl p-16 min-h-[300px] flex items-center justify-center">
+            <span id="word-display" class="text-6xl md:text-8xl font-bold uppercase">STARTING</span>
+        </div>
+
+        <!-- Next Group Button (initially hidden) -->
+        <button id="next-group-btn" class="hidden mt-8 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg shadow-lg transition-transform transform hover:scale-105">
+            Next Group
+        </button>
+
+        <!-- Completion Message (hidden initially) -->
+        <div id="complete-message" class="hidden text-center text-5xl font-bold text-green-400">
+            All words complete!
+        </div>
+    </div>
+
+    <script>
+        // --- 1. DEFINE ALL WORDS ---
+        const allWords = [
+            "ARCHITECT", "DOCTOR", "LAWYER", "DRIVER", "TEACHER", "ENGINEER", "NURSE", "POLICE", "PILOT", "FARMER", "DENTIST", "ACCOUNTANT", "MECHANIC", "SCIENTIST", "CHEF", "ARTIST", "JUDGE", "ACTOR", "WRITER", "PLUMBER", "ELECTRICIAN", "SOLDIER", "MUSICIAN", "BANKER", "FIREFIGHTER", "TAILOR", "CARPENTER", "VET", "DESIGNER",
+            "NEW", "GREAT", "GARDEN", "DESIRE", "BRIGHT", "KIND", "HONEST", "HUMBLE", "CLEVER", "STRONG", "CALM", "BRAVE", "BEAUTIFUL", "FRIENDLY", "HAPPY", "WISE", "POLITE", "GENEROUS", "GRATEFUL", "FAITHFUL", "POSITIVE", "CONFIDENT", "PURE", "GENTLE", "PATIENT", "COURAGEOUS", "TALENTED", "LOVING", "RESPECTFUL",
+            "ISOLATION", "DIRTY", "CRITICISM", "IRRITATION", "ANGER", "JEALOUSY", "FEAR", "HATRED", "LAZINESS", "SADNESS", "GREED", "ENVY", "GUILT", "PAIN", "FAILURE", "LONELINESS", "REGRET", "DESPAIR", "SHAME", "WORRY", "CONFUSION", "STRESS", "LOSS", "DISGUST", "DEPRESSION", "IGNORANCE", "BITTERNESS", "ANXIETY", "MISERY", "INSECURITY",
+            "BRAVERY", "DETERMINATION", "STRENGTH", "ABILITY", "HONESTY", "KINDNESS", "PATIENCE", "LOYALTY", "HOPE", "COMPASSION", "INTEGRITY", "WISDOM", "TRUST", "RESILIENCE", "DISCIPLINE", "CONFIDENCE", "COURAGE", "FAITH", "EMPATHY", "OPTIMISM", "CREATIVITY", "GENEROSITY", "HUMILITY", "SELF-CONTROL", "TOLERANCE", "FORGIVENNESS", "RESPONSIBILITY", "FAIRNESS", "GRATITUDE", "PERSEVERANCE",
+            "EARTH", "CHAIR", "BUILDING", "WALL", "TABLE", "TREE", "HOUSE", "ROAD", "STONE", "CAR", "DOOR", "WINDOW", "BRIDGE", "RIVER", "MOUNTAIN", "BED", "CUP", "PHONE", "BOOK", "PEN", "BAG", "CLOCK", "COMPUTER", "LAMP", "FLOOR", "ROOF", "STREET", "PLATE", "TRAIN", "SHIP", "PLANT"
+        ];
+
+        // --- 2. GET DOM ELEMENTS ---
+        const wordDisplay = document.getElementById('word-display');
+        const timerContainer = document.getElementById('timer-container');
+        // Use 'let' instead of 'const' so we can update the reference
+        let timerBar = document.getElementById('timer-bar-inner'); 
+        const nextGroupButton = document.getElementById('next-group-btn');
+        const completeMessage = document.getElementById('complete-message');
+        const counterDisplay = document.getElementById('counter-display');
+        const flashcard = document.getElementById('flashcard');
+
+        // --- 3. STATE VARIABLES ---
+        let shuffledWords = [];
+        let currentWordIndex = 0; // Overall index in shuffledWords
+        let wordsInGroupCounter = 0; // Index within the current group (0-19)
+        const groupSize = 20;
+        let wordTimeout = null;
+
+        // --- 4. UTILITY FUNCTIONS ---
+
+        /**
+         * Shuffles an array in place (Fisher-Yates).
+         */
+        function shuffle(array) {
+            let currentIndex = array.length,  randomIndex;
+            while (currentIndex != 0) {
+                randomIndex = Math.floor(Math.random() * currentIndex);
+                currentIndex--;
+                [array[currentIndex], array[randomIndex]] = [
+                    array[randomIndex], array[currentIndex]];
+            }
+            return array;
+        }
+
+        /**
+         * Resets the timer bar animation by replacing the element.
+         */
+        function resetTimerAnimation() {
+            const newTimerBar = timerBar.cloneNode(true);
+            
+            // Check if timerBar is still in the DOM before trying to replace it
+            if (timerBar.parentNode) {
+                timerBar.parentNode.replaceChild(newTimerBar, timerBar);
+                // Update the timerBar variable to point to the new, active element
+                timerBar = newTimerBar; 
+            }
+        }
+
+        // --- 5. CORE LOGIC ---
+
+        /**
+         * Displays the next word or handles group/completion logic.
+         */
+        function displayNextWord() {
+            // Clear any previous timeout
+            if (wordTimeout) {
+                clearTimeout(wordTimeout);
+            }
+
+            // Check if all words in the list are done
+            if (currentWordIndex >= shuffledWords.length) {
+                flashcard.classList.add('hidden');
+                timerContainer.classList.add('hidden');
+                counterDisplay.classList.add('hidden');
+                nextGroupButton.classList.add('hidden');
+                completeMessage.classList.remove('hidden');
+                return;
+            }
+
+            // Check if the current group of 20 is finished
+            if (wordsInGroupCounter >= groupSize) {
+                flashcard.classList.add('hidden');
+                timerContainer.classList.add('hidden');
+                counterDisplay.classList.add('hidden');
+                nextGroupButton.classList.remove('hidden'); // Show button
+                wordsInGroupCounter = 0; // Reset for next group
+                return;
+            }
+
+            // --- If we are here, display a word ---
+            
+            // Ensure correct UI elements are visible
+            flashcard.classList.remove('hidden');
+            timerContainer.classList.remove('hidden');
+            counterDisplay.classList.remove('hidden');
+            nextGroupButton.classList.add('hidden');
+
+            // Get the word
+            const word = shuffledWords[currentWordIndex];
+            wordDisplay.textContent = word;
+
+            // Calculate how many words are in this specific group (handles the last group)
+            const wordsRemainingInList = shuffledWords.length - (currentWordIndex - wordsInGroupCounter);
+            const wordsInThisGroup = Math.min(groupSize, wordsRemainingInList);
+            
+            // Update counter
+            counterDisplay.textContent = `Word ${wordsInGroupCounter + 1} of ${wordsInThisGroup}`;
+
+            // Reset timer animation
+            resetTimerAnimation();
+
+            // Increment counters
+            currentWordIndex++;
+            wordsInGroupCounter++;
+
+            // Set timeout for the next word
+            wordTimeout = setTimeout(displayNextWord, 30000); // 30 seconds
+        }
+
+        // --- 6. INITIALIZE ---
+
+        // Add event listener for the "Next Group" button
+        nextGroupButton.addEventListener('click', displayNextWord);
+
+        // Start the app
+        shuffledWords = shuffle(allWords.slice());
+        displayNextWord(); // Display the first word
+
+    </script>
+</body>
+</html>
+
